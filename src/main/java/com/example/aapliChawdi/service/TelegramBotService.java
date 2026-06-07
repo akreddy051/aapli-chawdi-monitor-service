@@ -131,11 +131,19 @@ public class TelegramBotService {
 
         // allow cancel anytime regardless of state
         if ("/cancel".equalsIgnoreCase(text.trim()) ||
-                "cancel".equalsIgnoreCase(text.trim())) {
+                "cancel".equalsIgnoreCase(text.trim()) ||
+                "🔄 refresh".equalsIgnoreCase(text.trim())) {
             UserSession session = userSessionService.getSession(chatId);
             userSessionService.reset(session);
-            telegramMessageService.sendMessage(chatId,
-                    "Cancelled. Send /start to see available commands.");
+            telegramClient.sendMessageWithReplyKeyboard(
+                    chatId,
+                    "✅ Reset done. What would you like to do?",
+                    List.of(
+                            List.of("Subscribe", "My Subscriptions"),
+                            List.of("Unsubscribe", "My Notices"),
+                            List.of("🔄 Refresh", "Help")
+                    )
+            );
             return;
         }
 
@@ -189,7 +197,7 @@ public class TelegramBotService {
                         List.of(
                                 List.of("Subscribe", "My Subscriptions"),
                                 List.of("Unsubscribe", "My Notices"),
-                                List.of("Help")
+                                List.of("🔄 Refresh", "Help")
                         )
                 );
                 break;
@@ -246,6 +254,19 @@ public class TelegramBotService {
             case "my notices":
             case "/notices":
                 sendNoticesVillageButtons(chatId);
+                break;
+            case "🔄 refresh":
+                UserSession refreshSession = userSessionService.getSession(chatId);
+                userSessionService.reset(refreshSession);
+                telegramClient.sendMessageWithReplyKeyboard(
+                        chatId,
+                        "✅ Reset done. What would you like to do?",
+                        List.of(
+                                List.of("Subscribe", "My Subscriptions"),
+                                List.of("Unsubscribe", "My Notices"),
+                                List.of("🔄 Refresh", "Help")
+                        )
+                );
                 break;
             default:
                 telegramMessageService.sendMessage(chatId,
