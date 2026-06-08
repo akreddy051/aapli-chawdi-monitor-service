@@ -4,6 +4,7 @@ import com.example.aapliChawdi.entity.Notice;
 import com.example.aapliChawdi.entity.NoticeReminder;
 import com.example.aapliChawdi.repository.NoticeReminderRepository;
 import com.example.aapliChawdi.service.TelegramMessageService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -25,6 +26,7 @@ public class ReminderScheduler {
     private static final DateTimeFormatter PORTAL_DATE_FORMAT =
             DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
+    @Transactional
     @Scheduled(cron = "0 0 8 * * *") // 8 AM daily
     public void sendDeadlineReminders() {
         log.info("Running deadline reminder check");

@@ -10,8 +10,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import java.nio.file.Path;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -65,21 +66,43 @@ public class NoticeProcessingService {
                 );
                 telegramClient.sendMessage(subscriber.getChatId(), summary);
                 // ask if they want a reminder
-                telegramClient.sendMessageWithInlineKeyboard(
-                        subscriber.getChatId(),
-                        "⏰ Objection deadline: " + notice.getObjectionLastDate() +
-                                "\nWant a reminder 3 days before the deadline?",
-                        List.of(List.of(
-                                Map.of("text", "✅ Yes, remind me",
-                                        "callback_data", "REMINDER_YES:" + notice.getId()),
-                                Map.of("text", "❌ No thanks",
-                                        "callback_data", "REMINDER_NO:" + notice.getId())
-                        ))
-                );
+                if (isReminderEligible(notice)) {
+                    telegramClient.sendMessageWithInlineKeyboard(
+                            subscriber.getChatId(),
+                            "⏰ Objection deadline: " + notice.getObjectionLastDate() +
+                                    "\nWant a reminder 3 days before the deadline?",
+                            List.of(List.of(
+                                    Map.of(
+                                            "text", "✅ Yes, remind me",
+                                            "callback_data", "REMINDER_YES:" + notice.getId()
+                                    ),
+                                    Map.of(
+                                            "text", "❌ No thanks",
+                                            "callback_data", "REMINDER_NO:" + notice.getId()
+                                    )
+                            ))
+                    );
+                } else {
+                    log.info(
+                            "Skipping reminder option for mutation {} because objection deadline has passed.",
+                            notice.getMutationNo()
+                    );
+                }
             }
-
             log.info("Notified {} subscriber(s) for mutation {}.",
                     subscribers.size(), notice.getMutationNo());
         }
+    }
+
+    private boolean isReminderEligible(Notice notice) {
+        String objectionDate = notice.getObjectionLastDate();
+        if (objectionDate == null || objectionDate.isBlank()) {
+            return false;
+        }
+        LocalDate deadline = LocalDate.parse(
+                objectionDate,
+                DateTimeFormatter.ofPattern("dd/MM/yyyy")
+        );
+        return deadline.isAfter(LocalDate.now());
     }
 }

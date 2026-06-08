@@ -4,6 +4,7 @@ import com.google.genai.Client;
 import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Part;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -14,6 +15,7 @@ import java.util.Arrays;
 import java.util.List;
 
 @Component
+@Slf4j
 public class GeminiClient {
 
     private String callGemini(String prompt) {
@@ -55,11 +57,13 @@ public class GeminiClient {
             return response.text();
 
         } catch (IOException e) {
+            log.debug(e.getMessage());
             throw new RuntimeException(
                     "Failed to read image file: " + imagePathString,
                     e
             );
         } catch (Exception e) {
+            log.debug(e.getMessage());
             throw new RuntimeException(
                     "Error while calling Gemini Vision API",
                     e

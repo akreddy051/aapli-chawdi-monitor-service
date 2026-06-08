@@ -37,7 +37,7 @@ public class TelegramBotService {
         try {
             log.info("Received message from {}: {}", chatId, text);
             handleMessage(chatId, text);
-        }  catch (Exception e) {
+        } catch (Exception e) {
             log.error("Failed to process message from {}", chatId, e);
             try {
                 telegramMessageService.sendMessage(chatId,
@@ -235,13 +235,13 @@ public class TelegramBotService {
             case "/help":
                 telegramMessageService.sendMessage(chatId,
                         """
-                        Commands:
-                        
-                        /subscribe - Subscribe to a village
-                        /list - View your subscriptions
-                        /unsubscribe - Remove a subscription
-                        /cancel - Cancel current operation
-                        """
+                                Commands:
+                                
+                                /subscribe - Subscribe to a village
+                                /list - View your subscriptions
+                                /unsubscribe - Remove a subscription
+                                /cancel - Cancel current operation
+                                """
                 );
                 break;
             case "cancel":
@@ -390,7 +390,7 @@ public class TelegramBotService {
             List<List<Map<String, String>>> rows = new ArrayList<>();
 
             for (Notice notice : notices) {
-                String label = notice.getMutationType() + " | " +
+                String label = notice.getMutationNo() + " | " + notice.getMutationType() + " | " +
                         notice.getMutationDate();
                 rows.add(List.of(Map.of(
                         "text", label,
