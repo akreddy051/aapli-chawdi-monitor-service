@@ -14,7 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -114,6 +115,14 @@ public class TelegramBotService {
                 }
                 case "REMINDER_NO" -> {
                     telegramMessageService.sendMessage(chatId, "Got it, no reminder.");
+                }
+                case "NOTICES_ACTIVE" -> {
+                    Long villageId = Long.valueOf(value);
+                    sendFilteredNotices(chatId, villageId, true);
+                }
+                case "NOTICES_EXPIRED" -> {
+                    Long villageId = Long.valueOf(value);
+                    sendFilteredNotices(chatId, villageId, false);
                 }
             }
         } catch (Exception e) {
@@ -387,22 +396,17 @@ public class TelegramBotService {
                 return;
             }
 
-            List<List<Map<String, String>>> rows = new ArrayList<>();
-
-            for (Notice notice : notices) {
-                String label = notice.getMutationNo() + " | " + notice.getMutationType() + " | " +
-                        notice.getMutationDate();
-                rows.add(List.of(Map.of(
-                        "text", label,
-                        "callback_data", "NOTICE_DETAIL:" + notice.getId()
-                )));
-            }
-
             telegramClient.sendMessageWithInlineKeyboard(
                     chatId,
-                    "Recent notices for " + village.getVillage() +
-                            " (tap to view):",
-                    rows);
+                    "What would you like to see for " +
+                            village.getVillage() + "?",
+                    List.of(List.of(
+                            Map.of("text", "📋 Active Notices",
+                                    "callback_data", "NOTICES_ACTIVE:" + villageId),
+                            Map.of("text", "📁 Expired Notices",
+                                    "callback_data", "NOTICES_EXPIRED:" + villageId)
+                    ))
+            );
         });
     }
 
@@ -419,6 +423,66 @@ public class TelegramBotService {
             }
             // send summary
             telegramMessageService.sendMessage(chatId, notice.getSummary());
+        });
+    }
+
+    private void sendFilteredNotices(
+            Long chatId, Long villageId, boolean active) {
+        villageRepository.findById(villageId).ifPresent(village -> {
+            List<Notice> notices = noticeRepository
+                    .findTop10ByVillageAndProcessedAtIsNotNullOrderByProcessedAtDesc(
+                            village);
+
+            LocalDate today = LocalDate.now();
+            DateTimeFormatter formatter =
+                    DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+            // filter based on active or expired
+            List<Notice> filtered = notices.stream()
+                    .filter(n -> {
+                        if (n.getObjectionLastDate() == null) return false;
+                        try {
+                            LocalDate deadline = LocalDate.parse(
+                                    n.getObjectionLastDate(), formatter);
+                            return active
+                                    ? !deadline.isBefore(today)   // active: today or future
+                                    : deadline.isBefore(today);    // expired: past
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+
+            if (filtered.isEmpty()) {
+                telegramMessageService.sendMessage(chatId,
+                        active
+                                ? "No active notices found for " +
+                                village.getVillage() + "."
+                                : "No expired notices found for " +
+                                village.getVillage() + "."
+                );
+                return;
+            }
+
+            List<List<Map<String, String>>> rows = new ArrayList<>();
+
+            for (Notice notice : filtered) {
+                String label = notice.getMutationNo() +
+                        " | " +notice.getMutationType() +
+                        " | " + notice.getMutationDate() +
+                        (active ? " ⏳ " + notice.getObjectionLastDate() : "");
+                rows.add(List.of(Map.of(
+                        "text", label,
+                        "callback_data", "NOTICE_DETAIL:" + notice.getId()
+                )));
+            }
+
+            telegramClient.sendMessageWithInlineKeyboard(
+                    chatId,
+                    (active ? "📋 Active Notices" : "📁 Expired Notices") +
+                            " for " + village.getVillage() + ":",
+                    rows
+            );
         });
     }
 }

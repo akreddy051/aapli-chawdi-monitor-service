@@ -52,19 +52,21 @@ public class ReminderScheduler {
                 long daysUntilDeadline = ChronoUnit.DAYS
                         .between(today, deadline);
 
-                if (daysUntilDeadline == 3) {
+                if (daysUntilDeadline >= 0 && daysUntilDeadline <= 3) {
                     telegramMessageService.sendMessage(
                             reminder.getChatId(),
-                            "⚠️ Reminder: The objection deadline for " +
-                                    "mutation " + notice.getMutationNo() +
+                            "⚠️ Reminder: The objection deadline for mutation " +
+                                    notice.getMutationNo() +
                                     " in " + notice.getVillage().getVillage() +
                                     " is on " + notice.getObjectionLastDate() +
-                                    " — only 3 days left to file an objection!"
+                                    (daysUntilDeadline == 0
+                                            ? " — TODAY is the last day to file an objection!"
+                                            : " — only " + daysUntilDeadline + " day(s) left!")
                     );
-                    reminder.setReminded(true);
-                    noticeReminderRepository.save(reminder);
-                    log.info("Reminder sent for notice {} to chatId {}",
-                            notice.getMutationNo(), reminder.getChatId());
+                    log.info("Reminder sent for notice {} to chatId {} ({} days left)",
+                            notice.getMutationNo(),
+                            reminder.getChatId(),
+                            daysUntilDeadline);
                 }
 
                 // deadline already passed — mark as reminded
