@@ -104,3 +104,5 @@
 17:27:46.160 [AWT-EventQueue-0] INFO  c.b.sdk.actions.EnableBrowserStack - Setting enable browserstack run update
 17:33:23.197 [ApplicationImpl pooled thread 3671] INFO  c.b.s.l.BrowserStackRunExtension - spring boot
 17:33:23.200 [ApplicationImpl pooled thread 3671] INFO  com.browserstack.sdk.utils.Helpers - null
+23:36:56.873 [ApplicationImpl pooled thread 1777] INFO  c.b.s.l.BrowserStackRunExtension - spring boot
+23:36:56.876 [ApplicationImpl pooled thread 1777] INFO  com.browserstack.sdk.utils.Helpers - null

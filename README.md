@@ -197,6 +197,31 @@ curl -X POST http://localhost:9999/notices/trigger
 
 This fetches notices and can send alerts to all affected subscribers.
 
+## Swagger UI and OpenAPI
+
+After starting the application, open http://localhost:9999/swagger-ui.html to browse
+all seven API operations, request schemas, and examples. Use **Try it out** and
+**Execute** to call an endpoint; subscription changes, Telegram replies, and scraping
+run against the actual service.
+
+On Northflank, redeploy this version and open
+`https://<your-service-domain>/swagger-ui.html`. No additional port is needed.
+The API server URL is relative (`/`), so requests use the same host and HTTPS scheme
+as the documentation page.
+
+- JSON specification: `/v3/api-docs`
+- YAML specification: `/v3/api-docs.yaml`
+
+To save a local copy of the generated specification:
+
+```bash
+curl -fsS http://localhost:9999/v3/api-docs.yaml -o openapi.yaml
+```
+
+Springdoc 3.0.3 generates documentation from the controllers for Spring Boot 4.0.x.
+To disable documentation in a deployment, set both
+`SPRINGDOC_API_DOCS_ENABLED=false` and `SPRINGDOC_SWAGGER_UI_ENABLED=false`.
+
 ## API endpoints
 
 All paths below use `http://localhost:9999` during local development.
