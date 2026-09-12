@@ -2,8 +2,8 @@ FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /build
 COPY pom.xml .
 COPY src ./src
-# The context-load test requires a configured database; run it outside image builds.
-RUN mvn -B -DskipTests package
+# Run tests separately in CI; image builds skip test compilation and execution.
+RUN mvn -B -Dmaven.test.skip=true package
 
 # Keep this version aligned with the Playwright dependency in pom.xml.
 FROM mcr.microsoft.com/playwright/java:v1.59.0-noble

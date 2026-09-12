@@ -136,6 +136,8 @@ Set these in the shell or IDE run configuration used to launch the application:
 export DB_PASSWORD='your_mysql_password'
 export TELEGRAM_BOT_TOKEN='your_telegram_bot_token'
 export GOOGLE_API_KEY='your_gemini_api_key'
+export ADMIN_API_KEY="$(openssl rand -hex 32)"
+export TELEGRAM_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 ```
 
 ### 3. Install Chromium and start the application
@@ -170,6 +172,7 @@ Register the public HTTPS hostname ngrok provides, using a shell with `TELEGRAM_
 curl -sS -X POST \
   "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   --data-urlencode "url=https://YOUR-NGROK-HOST/api/telegram/webhook" \
+  --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
   --data-urlencode 'allowed_updates=["message","callback_query"]'
 ```
 
@@ -180,7 +183,7 @@ Keep both Spring Boot and ngrok running. Register the webhook again whenever the
 If the village directory has not been populated:
 
 ```bash
-curl -X POST http://localhost:9999/villages/scrape
+curl -X POST http://localhost:9999/villages/scrape -H "X-API-Key: ${ADMIN_API_KEY}"
 ```
 
 `VillageDataScraper` reads district, taluka, and village dropdowns from the portal and stores their labels. It skips talukas with existing village records and attempts up to 10 browser sessions, waiting 30 seconds after session failures. A partially populated taluka can be skipped because the check only tests whether any records exist.
@@ -192,35 +195,86 @@ This is a synchronous, potentially long-running request. Inspect logs for comple
 Send `/start` to the bot and choose **Subscribe**. After subscribing, wait for the scheduled check or trigger it manually:
 
 ```bash
-curl -X POST http://localhost:9999/notices/trigger
+curl -X POST http://localhost:9999/notices/trigger -H "X-API-Key: ${ADMIN_API_KEY}"
 ```
 
 This fetches notices and can send alerts to all affected subscribers.
 
+## Authentication and deployment
+
+All administrative APIs require `X-API-Key: <ADMIN_API_KEY>`. Only
+`POST /api/telegram/webhook` accepts `X-Telegram-Bot-Api-Secret-Token` instead.
+The credentials are independent: an admin key cannot authenticate a webhook, and
+a webhook secret cannot authenticate an admin request. Unauthenticated requests
+receive JSON HTTP 401; authenticated requests outside allowed routes receive 403.
+Unknown routes and unsupported methods are denied by default. No login, HTTP Basic,
+cookie authentication, or authentication session is enabled. CSRF is disabled for
+this explicit-header-only authentication model; revisit it before adding browser
+cookie/session authentication. Cross-origin browser access is not enabled.
+
+Generate each secret independently with `openssl rand -hex 32` and store it in
+Northflank's secret environment configuration. Both authentication secrets must be
+32–256 characters using only letters, digits, `_`, or `-`, and must differ. Startup
+fails if either is absent or invalid. Never put credentials in source code, URL
+query parameters, Swagger examples, or logs. The `.env` patterns are ignored by Git;
+Spring Boot does not automatically load `.env` files.
+
+For a Northflank rollout:
+
+1. Set `ADMIN_API_KEY` and `TELEGRAM_WEBHOOK_SECRET` as secret environment variables
+   for the service. Keep the existing `TELEGRAM_BOT_TOKEN`, `GOOGLE_API_KEY`, and
+   database credentials configured.
+2. Rotate the database password previously exposed in logs. Set
+   `SPRING_DATASOURCE_URL=jdbc:mysql://<host>:3306/<database>`,
+   `SPRING_DATASOURCE_USERNAME=<username>`, and the new `DB_PASSWORD` (or
+   `SPRING_DATASOURCE_PASSWORD`). Remove the old embedded credentials from the URL.
+   Credential rotation must be performed in the database/provider; changing code
+   alone does not revoke a leaked password.
+3. Deploy the application. Configure a TCP health check on port **9999** if needed;
+   there is no anonymous HTTP health route. Existing probes to protected URLs must
+   be updated.
+4. Re-register the Telegram webhook using the existing bot token and the matching
+   `secret_token`, as shown in local setup. Preserve pending updates (do not enable
+   `drop_pending_updates`). Until registration matches, webhook deliveries receive
+   401 and Telegram may retry them. Coordinate these steps in a maintenance window.
+5. Verify an admin request without a key returns 401, then make the same request
+   with the key and check the result. Send `/help` in Telegram to verify delivery.
+
+Admin key rotation: generate a new key, update Northflank, redeploy, and update API
+clients. The old key stops working on the new instance; wait for old containers to
+terminate. Webhook secret rotation also requires updating Telegram's `setWebhook`
+registration to the new secret. This implementation accepts one active key per
+purpose and does not provide an overlap window for rotations.
+
 ## Swagger UI and OpenAPI
 
-After starting the application, open http://localhost:9999/swagger-ui.html to browse
-all seven API operations, request schemas, and examples. Use **Try it out** and
-**Execute** to call an endpoint; subscription changes, Telegram replies, and scraping
-run against the actual service.
+Documentation is **disabled by default**. To enable it, set both
+`SPRINGDOC_API_DOCS_ENABLED=true` and `SPRINGDOC_SWAGGER_UI_ENABLED=true` and restart.
+Even when enabled, the UI, its assets, and all specification endpoints require the
+admin `X-API-Key` header.
 
-On Northflank, redeploy this version and open
-`https://<your-service-domain>/swagger-ui.html`. No additional port is needed.
-The API server URL is relative (`/`), so requests use the same host and HTTPS scheme
-as the documentation page.
-
+- UI: `/swagger-ui.html`
 - JSON specification: `/v3/api-docs`
 - YAML specification: `/v3/api-docs.yaml`
 
-To save a local copy of the generated specification:
+An ordinary browser address-bar request will receive 401. For browser use, configure
+a trusted local proxy or header-injection tool scoped **only to your service origin**
+to supply `X-API-Key` on the UI, asset, and specification requests. The Swagger
+**Authorize** dialog only works after the protected page has loaded; select
+`AdminApiKey` for admin calls. Do not persist authorization in browser storage.
+Alternatively, download the specification with an authenticated client and import
+it into your API tool:
 
 ```bash
-curl -fsS http://localhost:9999/v3/api-docs.yaml -o openapi.yaml
+curl -fsS http://localhost:9999/v3/api-docs.yaml \
+  -H "X-API-Key: ${ADMIN_API_KEY}" -o openapi.yaml
 ```
 
-Springdoc 3.0.3 generates documentation from the controllers for Spring Boot 4.0.x.
-To disable documentation in a deployment, set both
-`SPRINGDOC_API_DOCS_ENABLED=false` and `SPRINGDOC_SWAGGER_UI_ENABLED=false`.
+On Northflank use `https://<your-service-domain>` instead of the local address.
+Always use HTTPS for remote authenticated requests. Subscription changes, Telegram
+replies, and scraping execute against the actual service. Springdoc 3.0.3 generates
+all seven operations from the controllers for Spring Boot 4.0.x. The server URL is
+relative (`/`), so API requests use the documentation host and scheme.
 
 ## API endpoints
 
@@ -304,6 +358,7 @@ To test the local route without sending a Telegram message or changing a subscri
 ```bash
 curl -i -X POST http://localhost:9999/api/telegram/webhook \
   -H 'Content-Type: application/json' \
+  -H "X-Telegram-Bot-Api-Secret-Token: ${TELEGRAM_WEBHOOK_SECRET}" \
   -d '{}'
 ```
 
@@ -316,7 +371,7 @@ The current controller returns HTTP 200 and logs receipt for this empty update. 
 - Notice captcha solving is configured for one attempt per fetch.
 - Notices are saved before subscriber delivery. There is no persistent delivery queue or per-subscriber retry tracking, and Telegram API error responses are logged without explicit success validation.
 - Cleanup deletes older notices without explicitly removing linked reminders, which can cause foreign-key failures.
-- The application currently has no endpoint authentication or Telegram webhook secret validation; these are not implemented deployment protections.
+- Endpoint authentication and Telegram webhook-secret validation are implemented. Per-user ownership checks, rate limiting, and request-size limits remain follow-up work.
 
 ## Tests
 
@@ -324,7 +379,7 @@ The current controller returns HTTP 200 and logs receipt for this empty update. 
 mvn test
 ```
 
-The existing test only checks whether the Spring application context loads. It needs suitable startup configuration and database access; there are no dedicated automated tests for bot conversations, scraper behavior, or notification delivery.
+The documentation/authentication integration tests use mocked services and verify authentication isolation, fail-closed configuration, protected OpenAPI resources, and denied requests. The full context test needs database and secret configuration. Existing unfinished Telegram tests currently fail compilation because they expect constructors absent from the current implementation; these are unrelated to the authentication change. Image builds skip test compilation and execution; run tests separately in CI.
 
 ## Author
 

@@ -21,7 +21,7 @@ public class TelegramWebhookController {
 
     private final TelegramBotService telegramBotService;
 
-    @Operation(summary = "Receive a Telegram update", description = "Processes a message or callback before acknowledging it. Sending a real update may change bot state and send Telegram replies.")
+    @Operation(security = @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "TelegramWebhookSecret"), summary = "Receive a Telegram update", description = "Processes a message or callback before acknowledging it. Sending a real update may change bot state and send Telegram replies.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             content = @Content(mediaType = "application/json", examples = {
                     @ExampleObject(name = "Empty probe", value = "{}", description = "Acknowledges without invoking the bot."),

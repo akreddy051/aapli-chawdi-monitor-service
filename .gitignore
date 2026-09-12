@@ -34,3 +34,7 @@ build/
 
 *.env
 screenshots/
+# Local secret files
+.env
+.env.*
+!.env.example
